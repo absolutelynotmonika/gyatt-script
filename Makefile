@@ -1,5 +1,5 @@
 LUA       = lua
-SRC_LEXER = lex.lua
+SRC_LEXER = src/lex.lua
 TEST_FILE = test.lua
 
 all: test

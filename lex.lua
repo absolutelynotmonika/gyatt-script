@@ -34,22 +34,39 @@ local Lexer = {}
 Lexer.src_code     = nil
 Lexer.pos          = 1
 Lexer.current_char = nil
+Lexer.err_count    = 0
 Lexer.tokens       = {}
 Lexer.token_types  = {
-	IDENTF  = "IDENTIFIER",
-	NUMBER  = "NUMBER",
-	STRING  = "STRING",
-	KEYWORD = "KEYWORD",
-	OPER    = "OPERATOR",
-	COMPAR  = "COMPARISON",
-	EOF     = "EOF"
+	IDENTF    = "IDENTIFIER",
+	WHITESPC  = "WHITESPACE",
+	NUMBER    = "NUMBER",
+	STRING    = "STRING",
+	KEYWORD   = "KEYWORD",
+	COMP_OPER = "COMPARISON",
+	BIN_OPER  = "BINARY OPERATOR",
+	PUNCT     = "PUNCTUATION",
+	ASSIGN    = "ASSIGNMENT OPERATOR",
+	EOF       = "EOF"
 }
 
 --[[
-	Stuff for token types
+	Representative values (idk what to call them)
 --]]
-local operators    = {"+", "-", "*", "/"}
-local dc_operators = {"<", ">", "="}
+Lexer.value_repr = {}
+Lexer.value_repr.binary_oper = {"+", "-", "*", "/"}
+Lexer.value_repr.punct = {"(", ")"}
+Lexer.value_repr.compr = {"<", ">", "="}
+Lexer.value_repr.identf = "^[%a_][%w_]*$" -- regex
+Lexer.keywords = {
+	"if",
+	"else",
+	"elseif",
+	"return",
+	"while",
+	"const",
+	"let"
+}
+
 --[[
 	Advance in the source code n amount of times.
 	@function advance
@@ -59,6 +76,15 @@ function Lexer:advance(n)
 	n = n or 1
 	self.pos = self.pos + n
 	Utils.dprint("advanced by " .. n .. " (current pos is " .. tostring(self.pos) .. ")")
+end
+
+--[[
+	Increment the error counter.
+	@function add_error
+--]]
+function Lexer:add_error()
+	self.err_count = self.err_count + 1
+	Utils.dprint("=== New error added, now count is " .. self.err_count)
 end
 
 --[[
@@ -76,7 +102,7 @@ end
 --]]
 function Lexer:add_token(token_type, value)
 	table.insert(self.tokens, Token:new(token_type, value))
-	Utils.dprint("added new token " .. "(" .. value .. ": ".. token_type .. ")")
+	Utils.dprint("added new token " .. "(\"" .. (value or "<nil>") .. "\": ".. token_type .. ")")
 end
 
 --[[
@@ -86,6 +112,109 @@ end
 --]]
 function Lexer:is_at_end()
 	return self.pos > #self.src_code
+end
+
+--[[
+	These functions (or this section) check for the value type of a
+	character and all will return true if it matches.
+
+	@section Value Type Check
+	@treturn Boolean
+--]]
+function Lexer.is_whitespace(char)
+	return Utils.table_contains({" ", "\t", "\n"}, char)
+end
+
+-- check if the character is a number.
+function Lexer.is_number(char)
+	return string.match(char, "%d")
+end
+
+-- check if the character is a binary oper.
+function Lexer.is_bin_oper(char)
+	return Utils.table_contains(Lexer.value_repr.binary_oper, char)
+end
+
+-- check if the character is a comparison operator.
+function Lexer.is_comp_oper(char)
+	return Utils.table_contains(Lexer.value_repr.compr, char)
+end
+
+-- check if the character is a punctuation.
+function Lexer.is_punct(char)
+	return Utils.table_contains(Lexer.value_repr.punct, char)
+end
+
+-- check if the character is a ", meaning it starts a string.
+function Lexer.is_string(char)
+	return char == "\""
+end
+
+-- this should run if Lexer.is_string() returns true, it gives the contents of the string.
+function Lexer:get_string()
+	local str = ""
+
+	while self:peek() ~= "\"" do
+		str = str .. self:peek()
+		self:advance()
+
+		if self:is_at_end() then
+			error("Unterminated string")
+		end
+	end
+
+	self:advance() -- eat the last character of the string
+	return str ~= "" and str or nil
+end
+
+-- check if the character is a-Z, 0-9 or _.
+function Lexer:is_alphanumeric(char)
+	return string.match(char, self.value_repr.identf) ~= nil
+end
+
+--[[
+	From now on, these functions return longer values based on their
+	type, like an entire identifier, an entire number and so on.
+
+	@section Get Value Based On Type
+
+	@treturn String
+--]]
+function Lexer:get_number()
+	local number_value = self.current_char
+
+	--- continue adding the number value
+	while self.is_number(self:peek()) do
+		number_value = number_value .. self:peek()
+		self:advance() -- eat the number
+	end
+
+	-- check if the next character is a dot, and if the character
+	-- after is it again a number then continue the number token. 
+	if self:peek() == "." and self.is_number(self.src_code:gsub(self.pos+2, self.pos+2)) then
+		number_value = number_value .. "."
+		self:advance() -- eat the dot away
+
+		--- continue adding the number value again
+		while self.is_number(self:peek()) do
+			number_value = number_value .. self:peek()
+			self:advance()
+		end
+	end
+
+	return number_value
+end
+
+-- same as get_string, but it returns a whole identifier.
+function Lexer:get_identf()
+	local identf = self.current_char
+
+	while self:is_alphanumeric(self:peek()) do
+		identf = identf .. self:peek()
+		self:advance()
+	end
+
+	return identf
 end
 
 --[[
@@ -104,23 +233,33 @@ function Lexer:get_tokens(src_code)
 		Utils.dprint("current char: " .. (self.current_char or "<nil>"))
 		Utils.dprint("peek: " .. (self:peek() or "<nil>"))
 
-		-- check if it meets always-single character operators.
-		if Utils.table_contains(operators, self.current_char) then
-			self:add_token(self.token_types.OPER, self.current_char)
+		-- skip if whitespace
+		if Lexer.is_whitespace(self.current_char) then
 			self:advance()
 			goto continue
 		end
 
-		-- check if it meets possibily double character tokens.
-		if Utils.table_contains(dc_operators, self.current_char) then
+		if Lexer.is_punct(self.current_char) then
+			self:add_token(self.token_types.PUNCT, self.current_char)
+			self:advance()
+			goto continue
+		end
+
+		if self.is_bin_oper(self.current_char) then
+			self:add_token(self.token_types.BIN_OPER, self.current_char)
+			self:advance()
+			goto continue
+		end
+
+		if self.is_comp_oper(self.current_char) then
 			if self:peek() == "=" then
-				self:add_token(self.token_types.COMPAR, self.current_char .. "=")
+				self:add_token(self.token_types.COMP_OPER, self.current_char .. "=")
 				self:advance(2)
 			else
-				-- since = isnt a comparisn operator, we specifically checks
-				-- against it using a "ternary".
+				-- since, for example = isnt a comparisn operator, we specifically checks
+				-- against it using ternary logic, also if its just standalone <, push it too.
 				self:add_token (
-					self.current_char ~= "=" and self.token_types.COMPAR or self.token_types.OPER,
+					self.current_char ~= "=" and self.token_types.COMP_OPER or self.token_types.ASSIGN,
 					self.current_char
 				)
 				self:advance(1)
@@ -129,39 +268,34 @@ function Lexer:get_tokens(src_code)
 			goto continue
 		end
 
-		--- if it doesnt match any case then
-		-- check if number
-		if string.match(self.current_char, "%d") then
-			Utils.dprint("# is number")
-			local number_value = self.current_char
+		-- check if its the start of a string.
+		if Lexer.is_string(self.current_char) then
+			self:add_token(self.token_types.STRING, self:get_string())
+			self:advance() -- eat the ending "
+			goto continue
+		end
 
-			--- continue adding the number value
-			while string.match(self:peek(), "%d") do
-				number_value = number_value .. self:peek()
-				self:advance()
-			end
-
-			-- check if the next character is a dot, and if the character
-			-- after is it again a number then continue the number token. 
-			if self:peek() == "." and string.match(self.src_code:gsub(self.pos+2, self.pos+2), "%d") then
-				number_value = number_value .. "."
-				self:advance() -- eat the dot away
-
-				--- continue adding the number value again
-				while string.match(self:peek(), "%d") do
-					number_value = number_value .. self:peek()
-					self:advance()
-				end
-			end
-
-			-- finally add the token
-			self:add_token(self.token_types.NUMBER, number_value)
+		if self.is_number(self.current_char) then
+			self:add_token(self.token_types.NUMBER, self:get_number())
 			self:advance()
 			goto continue
 		end
 
-		-- if it doesnt match anything fom above, then it is an error
+		if self:is_alphanumeric(self.current_char) then
+			local value = self:get_identf()
+
+			self:add_token(
+				Utils.table_contains(self.keywords, value) and Lexer.token_types.KEYWORD or Lexer.token_types.IDENTF,
+				value
+			)
+			self:advance() -- eat the last identifier character
+			goto continue
+		end
+
+		-- if it doesnt match anything from above, then it is an error
+		-- but the code execution continues
 		Utils.dprint("=== Invalid token found ===")
+		self:add_error()
 		self:advance()
 		goto continue
 
