@@ -1,5 +1,7 @@
 local Lexer = require("lex")
+local Parser = require("parse")
+local Utils = require("utils")
 
-for i, v in ipairs(Lexer:get_tokens("const x = 2---2")) do
-	print("token " .. i .. ": " .. v.value .. " (" .. v.type .. ")")
-end
+local ast = Parser:produce_ast("variable")
+print("ast:")
+print(Utils.pretty_print(ast.body), "   ")

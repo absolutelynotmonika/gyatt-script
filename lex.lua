@@ -1,4 +1,4 @@
-local Token, TokenType = require("token")
+local Token = require("token")
 local Utils = require("utils")
 
 --[[
@@ -70,7 +70,7 @@ end
 --]]
 function Lexer:add_token(token_type, value)
 	table.insert(self.tokens, Token:new(token_type, value))
-	Utils.dprint("added new token " .. "(\"" .. (value or "<nil>") .. "\": ".. token_type .. ")")
+	Utils.dprint("added new token " .. "(\"" .. (value or "<nil>") .. "\": ".. (token_type or "<nil>") .. ")")
 end
 
 --[[
@@ -215,7 +215,7 @@ function Lexer:get_tokens(src_code)
 		end
 
 		if Lexer.is_punct(self.current_char) then
-			self:add_token(TokenType.PUNCT, self.current_char)
+			self:add_token(Token.types.PUNCT, self.current_char)
 			self:advance()
 			goto continue
 		end
@@ -223,7 +223,7 @@ function Lexer:get_tokens(src_code)
 		-- this checks against unary too.
 		if self.is_bin_oper(self.current_char) then
 			self:add_token(
-				self:is_unary(self.current_char) and TokenType.UNARY or TokenType.BIN_OPER,
+				self:is_unary(self.current_char) and Token.types.UNARY or Token.types.BIN_OPER,
 				self.current_char
 			)
 			self:advance()
@@ -232,13 +232,13 @@ function Lexer:get_tokens(src_code)
 
 		if self.is_comp_oper(self.current_char) then
 			if self:peek() == "=" then
-				self:add_token(TokenType.COMP_OPER, self.current_char .. "=")
+				self:add_token(Token.types.COMP_OPER, self.current_char .. "=")
 				self:advance(2)
 			else
 				-- since, for example = isnt a comparisn operator, we specifically checks
 				-- against it using ternary logic, also if its just standalone <, push it too.
 				self:add_token (
-					self.current_char ~= "=" and TokenType.COMP_OPER or TokenType.ASSIGN,
+					self.current_char ~= "=" and Token.types.COMP_OPER or Token.types.ASSIGN,
 					self.current_char
 				)
 				self:advance(1)
@@ -249,14 +249,14 @@ function Lexer:get_tokens(src_code)
 
 		-- check if its the start of a string.
 		if Lexer.is_string(self.current_char) then
-			self:add_token(TokenType.STRING, self:get_string())
+			self:add_token(Token.types.STRING, self:get_string())
 			self:advance() -- eat the ending "
 			goto continue
 		end
 
 		if self.is_number(self.current_char) then
 			self:add_token(
-				TokenType.NUMBER,
+				Token.types.NUMBER,
 				self:get_number()
 			)
 			self:advance()
@@ -265,10 +265,15 @@ function Lexer:get_tokens(src_code)
 
 		if self:is_alphanumeric(self.current_char) then
 			local value = self:get_identf()
-			print(Utils.table_contains(self.keywords, value) and TokenType.KEYWORD or TokenType.IDENTF)
+
+			print(Utils.table_contains(self.keywords, value) and
+					Token.types.KEYWORD
+				or
+					Token.types.IDENTF
+			)
 
 			self:add_token(
-				Utils.table_contains(self.keywords, value) and TokenType.KEYWORD or TokenType.IDENTF,
+				Utils.table_contains(self.keywords, value) and Token.types.KEYWORD or Token.types.IDENTF,
 				value
 			)
 			self:advance() -- eat the last identifier character
@@ -286,8 +291,8 @@ function Lexer:get_tokens(src_code)
 			Utils.dprint("--- end loop ---\n")
 	end
 
-	Utils.dprint("==== REACHED END ====")
-	self:add_token(TokenType.EOF, "eof")
+	self:add_token(Token.types.EOF, "eof")
+	Utils.dprint("==== LEXING END ====")
 	return self.tokens
 end
 

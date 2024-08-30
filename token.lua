@@ -20,7 +20,7 @@ function Token:new(ttype, value)
 	if not type then
 		error("Token type expected in function call, not'" .. tostring(ttype) .. "(value of type " .. type(ttype) .. "'.")
 	end
-	assert(self.is_valid_type(o), "Unknown token type given '" .. tostring(ttype) .. "'.")
+	assert(self:is_valid_type(ttype), "Unknown token type given '" .. tostring(ttype) .. "'.")
 
 	o.type  = ttype
 	o.value = value
@@ -34,7 +34,7 @@ end
 	The available token types.
 	@table TokenType
 --]]
-local TokenType = {
+Token.types = {
 	IDENTF    = "IDENTIFIER",
 	WHITESPC  = "WHITESPACE",
 	NUMBER    = "NUMBER",
@@ -47,9 +47,8 @@ local TokenType = {
 	UNARY     = "UNARY OPERATOR",
 	EOF       = "EOF"
 }
-
-function Token:is_valid_type()
-	return Utils.table_contains(TokenType, string.upper(tostring(self.type)))
+function Token:is_valid_type(ttype)
+	return Utils.table_contains(self.types, string.upper(tostring(ttype)))
 end
 
-return Token, TokenType
+return Token
