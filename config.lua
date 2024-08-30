@@ -1,10 +1,11 @@
 --[[
 	This file contains kys-script information.
-	@module kys-script
+	@module gyatt-script
 --]]
 
-GYATT_SCRIPT = {}
+local GYATT_SCRIPT <const> = {}
 GYATT_SCRIPT.version = "0.0.1"
 GYATT_SCRIPT.is_debug_build = true
+GYATT_SCRIPT.authors = "https://github.com/absolutelynotmonika"
 
 return GYATT_SCRIPT

@@ -1,29 +1,5 @@
+local Token, TokenType = require("token")
 local Utils = require("utils")
-
---[[
-	A token class.
-	@class Token
-
-	@field type  Number The token type
-	@field value String The lexeme
---]]
-local Token = {}
-
--- class instance init
-function Token:new(ttype, value)
-	local o = {}
-
-	if not ttype then
-		error("Token type expected in function call.")
-	end
-
-	o.type  = ttype
-	o.value = value
-
-	setmetatable(o, self)
-	self.__index = self
-	return o
-end
 
 --[[
 	The lexer class
@@ -31,31 +7,19 @@ end
 	@field tokens Array  The array of tokens
 --]]
 local Lexer = {}
-Lexer.src_code     = nil
 Lexer.pos          = 1
 Lexer.current_char = nil
 Lexer.err_count    = 0
 Lexer.tokens       = {}
-Lexer.token_types  = {
-	IDENTF    = "IDENTIFIER",
-	WHITESPC  = "WHITESPACE",
-	NUMBER    = "NUMBER",
-	STRING    = "STRING",
-	KEYWORD   = "KEYWORD",
-	COMP_OPER = "COMPARISON",
-	BIN_OPER  = "BINARY OPERATOR",
-	PUNCT     = "PUNCTUATION",
-	ASSIGN    = "ASSIGNMENT OPERATOR",
-	EOF       = "EOF"
-}
 
 --[[
 	Representative values (idk what to call them)
 --]]
 Lexer.value_repr = {}
 Lexer.value_repr.binary_oper = {"+", "-", "*", "/"}
-Lexer.value_repr.punct = {"(", ")"}
+Lexer.value_repr.punct = {"(", ")", ";"}
 Lexer.value_repr.compr = {"<", ">", "="}
+Lexer.value_repr.unary = {"-"}
 Lexer.value_repr.identf = "^[%a_][%w_]*$" -- regex
 Lexer.keywords = {
 	"if",
@@ -96,6 +60,10 @@ function Lexer:peek()
 	return self.src_code:sub(self.pos+1, self.pos+1)
 end
 
+function Lexer:lookback()
+	return self.src_code:sub(self.pos-1, self.pos-1)
+end
+
 --[[
 	Add a token.in the Lexer.tokens array.
 	@function add_token
@@ -127,7 +95,7 @@ end
 
 -- check if the character is a number.
 function Lexer.is_number(char)
-	return string.match(char, "%d")
+	return string.match(char, "%d+")
 end
 
 -- check if the character is a binary oper.
@@ -150,21 +118,12 @@ function Lexer.is_string(char)
 	return char == "\""
 end
 
--- this should run if Lexer.is_string() returns true, it gives the contents of the string.
-function Lexer:get_string()
-	local str = ""
-
-	while self:peek() ~= "\"" do
-		str = str .. self:peek()
-		self:advance()
-
-		if self:is_at_end() then
-			error("Unterminated string")
-		end
-	end
-
-	self:advance() -- eat the last character of the string
-	return str ~= "" and str or nil
+function Lexer:is_unary(char)
+	return
+		char == "-"
+		and self.is_number(self:peek())
+		and self.is_whitespace(self:lookback())
+		and not self.is_number(self:lookback())
 end
 
 -- check if the character is a-Z, 0-9 or _.
@@ -205,6 +164,22 @@ function Lexer:get_number()
 	return number_value
 end
 
+-- this should run if Lexer.is_string() returns true, it gives the contents of the string.
+function Lexer:get_string()
+	local str = ""
+
+	while self:peek() ~= "\"" do
+		str = str .. self:peek()
+		self:advance()
+
+		assert(self:is_at_end(), "Unterminated string")
+	end
+
+	self:advance() -- eat the last character of the string
+	return str ~= "" and str or nil
+end
+
+
 -- same as get_string, but it returns a whole identifier.
 function Lexer:get_identf()
 	local identf = self.current_char
@@ -223,7 +198,7 @@ end
 	@treturn  Array
 --]]
 function Lexer:get_tokens(src_code)
-	self.src_code = src_code
+	self.src_code = src_code -- define the input source code here
 	Utils.dprint("==== LEXING START ====\n")
 
 	while not self:is_at_end() do
@@ -240,26 +215,30 @@ function Lexer:get_tokens(src_code)
 		end
 
 		if Lexer.is_punct(self.current_char) then
-			self:add_token(self.token_types.PUNCT, self.current_char)
+			self:add_token(TokenType.PUNCT, self.current_char)
 			self:advance()
 			goto continue
 		end
 
+		-- this checks against unary too.
 		if self.is_bin_oper(self.current_char) then
-			self:add_token(self.token_types.BIN_OPER, self.current_char)
+			self:add_token(
+				self:is_unary(self.current_char) and TokenType.UNARY or TokenType.BIN_OPER,
+				self.current_char
+			)
 			self:advance()
 			goto continue
 		end
 
 		if self.is_comp_oper(self.current_char) then
 			if self:peek() == "=" then
-				self:add_token(self.token_types.COMP_OPER, self.current_char .. "=")
+				self:add_token(TokenType.COMP_OPER, self.current_char .. "=")
 				self:advance(2)
 			else
 				-- since, for example = isnt a comparisn operator, we specifically checks
 				-- against it using ternary logic, also if its just standalone <, push it too.
 				self:add_token (
-					self.current_char ~= "=" and self.token_types.COMP_OPER or self.token_types.ASSIGN,
+					self.current_char ~= "=" and TokenType.COMP_OPER or TokenType.ASSIGN,
 					self.current_char
 				)
 				self:advance(1)
@@ -270,22 +249,26 @@ function Lexer:get_tokens(src_code)
 
 		-- check if its the start of a string.
 		if Lexer.is_string(self.current_char) then
-			self:add_token(self.token_types.STRING, self:get_string())
+			self:add_token(TokenType.STRING, self:get_string())
 			self:advance() -- eat the ending "
 			goto continue
 		end
 
 		if self.is_number(self.current_char) then
-			self:add_token(self.token_types.NUMBER, self:get_number())
+			self:add_token(
+				TokenType.NUMBER,
+				self:get_number()
+			)
 			self:advance()
 			goto continue
 		end
 
 		if self:is_alphanumeric(self.current_char) then
 			local value = self:get_identf()
+			print(Utils.table_contains(self.keywords, value) and TokenType.KEYWORD or TokenType.IDENTF)
 
 			self:add_token(
-				Utils.table_contains(self.keywords, value) and Lexer.token_types.KEYWORD or Lexer.token_types.IDENTF,
+				Utils.table_contains(self.keywords, value) and TokenType.KEYWORD or TokenType.IDENTF,
 				value
 			)
 			self:advance() -- eat the last identifier character
@@ -304,7 +287,7 @@ function Lexer:get_tokens(src_code)
 	end
 
 	Utils.dprint("==== REACHED END ====")
-	self:add_token(self.token_types.EOF, "eof")
+	self:add_token(TokenType.EOF, "eof")
 	return self.tokens
 end
 

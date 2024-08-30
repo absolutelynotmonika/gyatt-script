@@ -3,7 +3,7 @@
 	@module utils
 --]]
 
-local GYATT_SCRIPT = require("gyatt-script")
+local GYATT_SCRIPT = require("config")
 
 --[[
 	The main table.
