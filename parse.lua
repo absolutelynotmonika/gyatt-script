@@ -87,6 +87,11 @@ function Parser:produce_ast(src_code)
 		Utils.dprint("--- loop start ---")
 
 		local stmt = self:parse_stmt()
+		if stmt == nil then
+			Utils.dprint("Invalid statement found")
+			return nil
+		end
+
 		table.insert(self.program.body, stmt)
 		Utils.dprint("added stmt (kind: " .. (stmt.kind or "<nil>") .. ")")
 		self:advance()
