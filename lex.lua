@@ -291,7 +291,7 @@ function Lexer:get_tokens(src_code)
 			Utils.dprint("--- end loop ---\n")
 	end
 
-	self:add_token(Token.types.EOF, "eof")
+--	self:add_token(Token.types.EOF, "eof")
 	Utils.dprint("==== LEXING END ====")
 	return self.tokens
 end

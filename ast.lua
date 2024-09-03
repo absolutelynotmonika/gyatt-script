@@ -14,7 +14,7 @@ function Stmt:new(kind)
 	local o = {}
 
 	o.kind = kind
-	o.general_kind = "Expr"
+	o.general_kind = "expr"
 
 	setmetatable(o, self)
 	self.__index = self
@@ -30,7 +30,7 @@ end
 local Expr = {}
 function Expr:new(kind)
 	local o = Stmt:new(kind)
-	o.general_kind = "Expr"
+	o.general_kind = "expr"
 
 	setmetatable(o, self)
 	self.__index = self
@@ -71,9 +71,9 @@ function NodeTypes.BinaryExpr:new(left, right, op)
 	local o = Expr:new("BinaryExpr")
 
 	-- make sure both sides of the expression are Expr internally.
-	assert(left.general_kind ~= "Expr", "Left side of BinaryExpr should be 'expr' not '" .. left.general_kind .. "'.")
-	assert(right.general_kind ~= "Expr", "Right side of BinaryExpr should be 'expr' not '" .. right.general_kind .. "'.")
-
+--[[	assert(left.general_kind ~= "expr", "Left side of BinaryExpr should be 'expr' not '" .. left.general_kind .. "'.")
+	assert(right.general_kind ~= "expr", "Right side of BinaryExpr should be 'expr' not '" .. right.general_kind .. "'.")
+--]]
 	o.left = left
 	o.right = right
 	o.operator = op

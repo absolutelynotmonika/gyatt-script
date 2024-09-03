@@ -10,9 +10,10 @@ Parser.pos = 1
 	Advance in the tokens array.
 	@function advance
 --]]
-function Parser:advance()
-	self.pos = self.pos + 1
-	Utils.dprint("advanced by 1")
+function Parser:advance(n)
+	n = n or 1
+	self.pos = self.pos + n
+	Utils.dprint("advanced by " .. n)
 end
 
 --[[
@@ -25,12 +26,13 @@ function Parser:get_current_token()
 end
 
 --[[
-	Check if the current token: is eof.
+	Check if the current token is eof.
 	@function is_eof
 	@treturn  Bool
 --]]
 function Parser:is_eof()
-	return self.tokens[self.pos].type == Token.types.EOF
+--	return self.tokens[self.pos].type == Token.types.EOF
+	return self.pos >= #self.tokens
 end
 
 --[[
@@ -38,7 +40,7 @@ end
 	@function parse_stmt
 	@treturn  Stmt
 
-	@NOTE: since we have no expressions, it just returns a statement.
+	@NOTE: since we have no statements, it just returns an expression.
 --]]
 function Parser:parse_stmt()
 	return self:parse_expr()
@@ -50,21 +52,53 @@ end
 	@treturn  Expr
 --]]
 function Parser:parse_expr()
-	return self:parse_primary_expr()
+	return self:parse_additive_expr()
+end
+
+--[[
+	Orders of presidence
+
+	Logical expr
+	Comparison expr
+	Aditive expr
+	Multiplicative expr
+	Unary expr
+	Primary expr
+--]]
+
+function Parser:parse_additive_expr()
+	local left = self:parse_primary_expr()
+	self:advance()
+	local token <const> = self:get_current_token()
+
+	while token.type == Token.types.BIN_OPER and (token.value == "+" or token.value == "-") do
+		local oper <const> = token.value
+		self:advance()
+		local right <const> = self:parse_primary_expr()
+
+		print(oper)
+		left = NodeTypes.BinaryExpr:new(left, right, oper)
+	end
+
+	return left
 end
 
 function Parser:parse_primary_expr()
-	local token = self:get_current_token()
+	local token <const> = self:get_current_token()
 
-	local type = token.type
-	local value = token.value
-
-	if type == Token.types.IDENTF then
-		return NodeTypes.Identifier:new(value)
-	elseif type == Token.types.NUMBER then
-		return NodeTypes.NumericLiteral:new(value)
+	if token.type == Token.types.IDENTF then
+		Utils.dprint("returned an identifier")
+		return NodeTypes.Identifier:new(token.value)
+	elseif token.type == Token.types.NUMBER then
+		Utils.dprint("returned a numeric literal")
+		return NodeTypes.NumericLiteral:new(token.value)
 	else
-		return nil -- gonna be changed.
+		Utils.dprint(string.format(
+			"Unexpected token found during parsing:\n\t%s\nof type: %s.",
+			token.value,
+			token.type
+		))
+		os.exit(1)
 	end
 end
 
@@ -86,11 +120,7 @@ function Parser:produce_ast(src_code)
 	while not self:is_eof() do
 		Utils.dprint("--- loop start ---")
 
-		local stmt = self:parse_stmt()
-		if stmt == nil then
-			Utils.dprint("Invalid statement found")
-			return nil
-		end
+		local stmt <const> = self:parse_stmt()
 
 		table.insert(self.program.body, stmt)
 		Utils.dprint("added stmt (kind: " .. (stmt.kind or "<nil>") .. ")")
